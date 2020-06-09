@@ -1,0 +1,226 @@
+---
+title: "Untitled"
+author: "S Moenga"
+date: "6/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+*TRANSCRIPTOME ANALYSIS*
+
+```{r Read summarization}
+library('rtracklayer')
+library(Rsubread)
+library("org.Carietinum.eg.db")
+
+bam.files <- list.files(path = "/Bam/Mapped", pattern = ".sorted.bam$", full.names = T)
+
+features_count= featureCounts(files = bam.files, 
+                              annot.ext= "/Ref_files/Ref.gff",
+                              isGTFAnnotationFile=TRUE, 
+                              strandSpecific = 2,
+                              GTF.featureType = "gene",
+                              GTF.attrType = "Dbxref",
+                              useMetaFeatures=T, countMultiMappingReads=T, 
+                              autosort= T, nthreads=4, allowMultiOverlap=T ) 
+#write to disk
+write.csv(features_count, file = "features_count.csv")
+
+```
+
+```{r Differential Expression analyis}
+library(edgeR)
+library(limma)
+
+counts = read.csv("/Counts/features_count.csv", sep = ",", header=T,  row.names = 1)
+str(counts_2016)
+
+metadata = read.table("/Counts/metadata.csv", sep = ",", header = T)
+
+#generate DGE object
+y= DGEList(counts) 
+colnames(y)=metadata$Sample_name #rename column headers as needed; first check that metadata file sample order matches counts file order 
+y$samples$Genotype <- metadata$Genotype
+y$samples$Species <- metadata$Species
+y$samples$Treatment <- metadata$Treatment
+y$samples$group <- metadata$group
+
+#low count filtering
+
+#how many genes are o-expressed?
+table(rowSums(y$counts==0)==42)
+
+keep <- rowSums(cpm(y)>1) >= 3
+#recalculate lib size after the filtering though the difference is usually negligible.
+y <- y[keep, , keep.lib.sizes=FALSE] #left with 20035 genes 
+
+#calculate normalization factors
+y <- calcNormFactors(y, method = "TMM")
+
+
+# Generating MDS plot
+col.treat  = c("darkorchid1","yellowgreen","tomato4")
+col.treat <- col.treat[match(y$samples$Treatment,
+                                  levels(y$samples$Treatment))]
+pch1=c(15,23,19,17)
+geno_points <- c(15,23,19,17)[match(y$samples$Genotype, levels(y$samples$Genotype))]
+
+plotMDS(cpm(y, log=T), gene.selection = "common", top =21000, dim.plot= c(1,2),cex =2,
+col = col.treat, pch = geno_points)
+legend("topleft", lwd=4, col = c("darkorchid1","yellowgreen","tomato4"),cex=1.3,
+       legend = levels(y$samples$Treatment))
+legend("top", pch = pch1,cex=1, 
+       legend = levels(y$samples$Genotype))
+
+
+#Fit a linear model to the data with tassuming normal distribution
+
+design1 <- model.matrix(~0+y$samples$group)
+  colnames(design1) <- levels(group)
+
+# Pre-designate contrasts for differential analysis
+my.contrasts <- makeContrasts(
+     ICC14778_Mild_vs_Control = ICC_14778.Mild-ICC_14778.Control,                       
+  ICC14778_Severe_vs_Control =ICC_14778.Severe-ICC_14778.Control,
+  ICC14778_Severe_vs_Mild =ICC_14778.Severe-ICC_14778.Mild,
+  ICC8058_Mild_vs_Control =ICC_8058.Mild-ICC_8058.Control,
+  ICC8058_Severe_vs_Control =ICC_8058.Severe-ICC_8058.Control,
+  ICC8058_Severe_vs_Mild =ICC_8058.Severe-ICC_8058.Mild,
+  Savur63_Mild_vs_Control =Savur_063.Mild-Savur_063.Control,
+  Savur63_Severe_vs_Control =Savur_063.Severe-Savur_063.Control,
+  Savur63_Severe_vs_Mild =Savur_063.Severe-Savur_063.Mild,
+  Kalkan64_Mild_vs_Control =Kalkan_064.Mild-Kalkan_064.Control,
+  Kalkan64_Severe_vs_Control =Kalkan_064.Severe-Kalkan_064.Control,
+  Kalkan64_Severe_vs_Mild =Kalkan_064.Severe-Kalkan_064.Mild,
+  levels = design1
+)
+
+# for species level differentiation:
+design2 <- model.matrix(~0+group_species)
+  colnames(design2) <- levels(group_species)
+design2
+
+my.contasts_per_species= makeContrasts(
+    Ari_vs_Ret_control = Carietinum.Control - Creticulatum.Control,           
+   Ari_vs_Ret_severe =Carietinum.Severe - Creticulatum.Severe,
+   Ari_vs_Ret_mild = Carietinum.Mild-Creticulatum.Mild, 
+  levels = design2)
+
+### remove heteroscedasticity
+y_voom <- voom(y, design1, plot=T)
+
+#Remodel in limma 
+vfit <- lmFit(y_voom, design1)
+vfit1 <- contrasts.fit(vfit, contrasts=my.contrasts_2016)
+efit <- eBayes(vfit1)
+
+
+#extract Differentially expressed genes
+topTable(efit, coef=2,resort.by="logFC", adjust.method = "BH", p.value=0.05, number =Inf)
+
+```
+
+
+```{r Clustering}
+library(ComplexHeatmap)
+library(dendextend)
+#convert file with gene tags and LFC into matrix
+drought_exp_all= as.matrix(drought_exp_all)
+    
+#set color scale
+col_fun = colorRamp2(c(-2, 0, 2), c("green", "black", "red"))
+col_fun(seq(-2, 2))
+
+#Generate dendogram, default dist option is euclidean
+dend_1= as.dendrogram(hclust(dist(drought_exp_all)),edgePar = c(cex = 1, lty = 1:3), horiz = T)
+#Add distinguising color to clusters on dendogram 
+dend = color_branches(dend_1, k = 10)
+
+#generate heatmap
+all_heat_dend = Heatmap(drought_exp_all, name = "L2FC", col= col_fun, show_row_names = F,use_raster = T, jitter =T, cluster_rows = dend, row_split = 10, row_dend_width = unit(70, "mm"))
+
+```
+
+
+```{r Patterned Differential expression analysis}
+
+library(NOISeq)
+library(maSigPro)
+
+#Load an arrayed version of metadata file
+edesign_abiotic = read.csv2("/Counts/edesign_table.csv", sep = ",") #make sure rownames are unique
+
+#organize data , order the dataframes of both the array and the counts 
+edesign_abiotic[,1] = as.numeric(as.character(edesign_abiotic[,1]))
+rownames(edesign_abiotic)<- as.factor(rownames(edesign_abiotic))
+edesign_abiotic = as.matrix(edesign_abiotic)
+
+#Create a regression matrix for the full regression mode
+design <- make.design.matrix(edesign_abiotic, degree = 2, time.col = 1, 
+                   repl.col = 2, group.cols = c(3:ncol(edesign_abiotic)))
+
+##calculate theta
+    estimateDisp(tmm(y$counts), design1)
+
+#compute a regression fit for each gene
+fit_all <- p.vector(tmm_normalized_y, design = design, MT.adjust = "BH", Q = 0.05, counts = T, min.obs = 20, theta = 11.084)
+
+#find significant variables for each gene
+tstep_all = T.fit(fit_all)
+
+#Extract list of significant genes 
+sigs_all = get.siggenes(tstep=tstep_all,
+        rsq=0.70, vars="all")
+
+#generate plots of clusters patterned expression
+see.genes(sigs_all$sig.genes,sigs_all$sig.genes$edesign,distance = "cor", min.obs =20, step.method = "two.ways.backward", cluster.method = "hclust",show.fit=F, k=15, alfa=0.05, color.mode= "rainbow", cexlab = 14, legend = T,summary.mode = "median", newX11 = F)
+
+
+```
+
+
+```{r Gene Set enrichment with GAGE and Pathview}
+##Gene set enrichment
+library(gage)
+
+#Load the DEG list, in this case >1 LFC
+Gene_List= topTable(efit, n=Inf, coef=2,sort.by = "logFC", resort.by="p")
+
+Gene_List_fc= Gene_List$logFC
+  length(Savur_fc)
+
+names(Gene_List_fc) = Gene_List$ENTREZID
+
+data(kegg.gs) #Invoke KEGG database
+
+cam=kegg.gsets("cam") #Load C. arietinum kegg pathways
+
+kg.cam =cam$kg.sets
+
+fc.kegg.p <- gage(Savur.fc, gsets = kg.cam, ref = NULL, samp = NULL, same.dir=T,set.size = c(2, 500), FDR.adj= T, use.fold =T) 
+
+#visuaLize with Pathview
+out.suffix = "Tolerant_Severe_test_limma"
+
+sel <- fc.kegg.p$greater[, "q.val"] < 0.1&
+         !is.na(fc.kegg.p$greater[, "q.val"])
+path.ids <- rownames(fc.kegg.p$greater)[sel]
+
+sel.1 <- fc.kegg.p$less[, "q.val"] < 0.1 &
+           !is.na(fc.kegg.p$less[,"q.val"])
+
+path.ids.1 <- rownames(fc.kegg.p$less)[sel.1]
+
+path.ids2 <- substr(c(path.ids, path.ids.1), 1, 8)
+
+library(pathview)
+#native kegg network view
+ pv.out.list <- sapply(path.ids2, function(pid) pathview(
+                       gene.data =Gene_List_fc, pathway.id = pid,
+                      species = "cam", out.suffix=out.suffix))
+
+```
+
