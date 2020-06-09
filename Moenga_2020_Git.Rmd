@@ -9,7 +9,7 @@ output: html_document
 #knitr::opts_chunk$set(echo = TRUE)
 ```
 
-*TRANSCRIPTOME ANALYSIS*
+*TRANSCRIPTOME ANALYSIS, adapted from Law et al., 2016*
 
 ```{r Read summarization}
 library('rtracklayer')
@@ -125,7 +125,7 @@ topTable(efit, coef=2,resort.by="logFC", adjust.method = "BH", p.value=0.05, num
 
 
 ```{r Clustering}
-library(ComplexHeatmap)
+library(ComplexHeatmap) #(Gu et al., 2016)
 library(dendextend)
 #convert file with gene tags and LFC into matrix
 drought_exp_all= as.matrix(drought_exp_all)
@@ -184,7 +184,7 @@ see.genes(sigs_all$sig.genes,sigs_all$sig.genes$edesign,distance = "cor", min.ob
 
 ```{r Gene Set enrichment with GAGE and Pathview}
 ##Gene set enrichment
-library(gage)
+library(gage) # (Luo et al., 2009)
 
 #Load the DEG list, in this case >1 LFC
 Gene_List= topTable(efit, n=Inf, coef=2,sort.by = "logFC", resort.by="p")
