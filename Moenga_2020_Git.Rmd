@@ -17,11 +17,12 @@ editor_options:
 
 #Trended transpiration analysis : Figure 1a
 
-setwd("/Users/susanmoenga/Desktop/PhD_protocols/2016_Summer_drydown/Summer_Data/Doug_Comments")
+setwd("/Phys_data")
 
 weights_info = read.csv("Molten_weights.csv", header =T)
 
 library(dplyr)
+
 df.summary <- weights_info %>%
   group_by(Genotype,group, ordered_variable,Water_treatment ) %>%
   summarise(
@@ -42,20 +43,16 @@ df.summary
    theme(axis.text.x = element_text(color = "black",face = "bold", size = 12, angle = 60), axis.text.y = element_text(face = "bold", size = 12))+
    theme(legend.text = element_text(color = "black", size =12, face= "bold"))
  
+ #################################################################################################
  
-#######################################################################################################
- 
- 
-  
- # Used for generating cumulative transpiration,shoot biomass, weight per seed, seed count Figures 1b, S2, S4
+ #Used for generating cumulative transpiration,shoot biomass, weight per seed, seed count Figures 1b, S2, S4
  
  library(multcompView)
  
-
 data=read.csv("Combined_data.csv", sep = ",", header = T, check.names = F )
-head(data) 
+head(data)
 
-# What is the effect of the treatment on the value ?
+# Following assessment of assumptions of normality and heteroscedasticity  (not presented here); A two way anova (or one-way "grouped" anova as presented here):
 model=lm( data$Seed_Count ~ data$Group )
 ANOVA=aov(model)
  
@@ -82,13 +79,10 @@ generate_label_df <- function(TUKEY, variable){
 LABELS <- generate_label_df(TUKEY , "data$Group")
  
 # A panel of colors so that each treatment group would have the same label color :
-
 my_colors = rep(c("darkorchid1","dimgrey","darkgoldenrod4"), 4)  ##colorblind friendly colors
  
 # Draw the basic boxplot
-
 a <- boxplot(data$Seed_Count  ~ data$Group , ylim=c(min(data$WUE , na.rm = T) , 1.1*max(data$Seed_Count, na.rm = T)) , outline = T, col=my_colors,width = rep(c(8,8,8),4),  ylab="Seed Count" , main=" Seed Count")
-
  
 # add the letter over each box at a defined position
 over <- 0.03*max( a$stats[nrow(a$stats),] )
