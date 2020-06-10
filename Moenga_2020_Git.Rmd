@@ -3,10 +3,137 @@ title: "Gene co-expression analysis reveals transcriptome divergence between wil
 author: "S Moenga"
 date: "6/9/2020"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
 #knitr::opts_chunk$set(echo = TRUE)
+```
+
+*Physiological data Analysis*
+
+```{r Figures 1, S2, S4}
+
+#Trended transpiration analysis : Figure 1a
+
+setwd("/Users/susanmoenga/Desktop/PhD_protocols/2016_Summer_drydown/Summer_Data/Doug_Comments")
+
+weights_info = read.csv("Molten_weights.csv", header =T)
+
+library(dplyr)
+df.summary <- weights_info %>%
+  group_by(Genotype,group, ordered_variable,Water_treatment ) %>%
+  summarise(
+    sd = parameters::standard_error(molten_variables_weights, na.rm = TRUE),
+    molten_variables_weights = mean(molten_variables_weights)
+  )
+df.summary
+
+#plot
+ ggplot(weights_info, 
+        aes(x = ordered_variable,y = molten_variables_weights, color= Genotype))+
+    geom_line(aes(group = group, linetype = Water_treatment), size=1,data = df.summary)+
+ geom_errorbar(
+    aes(ymin =  molten_variables_weights-sd, ymax =  molten_variables_weights+sd),
+    data = df.summary, width = 0.3, size=0.7) +
+  scale_linetype_manual(values=c("dashed", "solid", "twodash"))+
+   scale_colour_colorblind()+
+   theme(axis.text.x = element_text(color = "black",face = "bold", size = 12, angle = 60), axis.text.y = element_text(face = "bold", size = 12))+
+   theme(legend.text = element_text(color = "black", size =12, face= "bold"))
+ 
+ 
+#######################################################################################################
+ 
+ 
+  
+ # Used for generating cumulative transpiration,shoot biomass, weight per seed, seed count Figures 1b, S2, S4
+ 
+ library(multcompView)
+ 
+
+data=read.csv("Combined_data.csv", sep = ",", header = T, check.names = F )
+head(data) 
+
+# What is the effect of the treatment on the value ?
+model=lm( data$Seed_Count ~ data$Group )
+ANOVA=aov(model)
+ 
+# Tukey test to study each pair of treatment :
+TUKEY <- TukeyHSD(x=ANOVA, 'data$Group', conf.level=0.95, na.rm = T)
+ 
+# See Tukey test family-wise confidence representation :
+plot(TUKEY , las=1 , col="brown")
+ 
+ # group the treatments that are not different each other together.
+generate_label_df <- function(TUKEY, variable){
+ 
+     # Extract labels and factor levels from Tukey post-hoc 
+     Tukey.levels <- TUKEY[[variable]][,4]
+     Tukey.labels <- data.frame(multcompLetters(Tukey.levels)['Letters'])
+     
+     #I need to put the labels in the same order as in the boxplot :
+     Tukey.labels$treatment=rownames(Tukey.labels)
+     Tukey.labels=Tukey.labels[order(Tukey.labels$treatment) , ]
+     return(Tukey.labels)
+     }
+ 
+# Apply the function on my dataset
+LABELS <- generate_label_df(TUKEY , "data$Group")
+ 
+# A panel of colors so that each treatment group would have the same label color :
+
+my_colors = rep(c("darkorchid1","dimgrey","darkgoldenrod4"), 4)  ##colorblind friendly colors
+ 
+# Draw the basic boxplot
+
+a <- boxplot(data$Seed_Count  ~ data$Group , ylim=c(min(data$WUE , na.rm = T) , 1.1*max(data$Seed_Count, na.rm = T)) , outline = T, col=my_colors,width = rep(c(8,8,8),4),  ylab="Seed Count" , main=" Seed Count")
+
+ 
+# add the letter over each box at a defined position
+over <- 0.03*max( a$stats[nrow(a$stats),] )
+ 
+#Add the labels
+text( c(1:nlevels(data$Group)) , a$stats[nrow(a$stats),]+over , LABELS[,1]  , col=my_colors , cex = 1.2,)
+
+#######################################################################################################
+
+#For generating Figure 1c, d
+
+  library("FactoMineR")
+ 
+  #Impute any missing values
+ library(missMDA)
+
+Clean_PCA = imputeFAMD(data, ncp = 2)
+  head(Clean_PCA$completeObs)
+ 
+PCA_pca = PCA(
+Clean_PCA$tab.disj[,9:16], scale.unit = TRUE, ncp = 10, graph = TRUE)
+  ##Clean_PCA$tab.disj  
+    
+drought.pca <- prcomp(Clean_PCA$completeObs[,6:12], scale. =T)
+
+#GENOTYPE_HIGHLIGHTED
+
+#Here, grouping is by treatment ; if  by genotype, then "group" is changed to genotype and colors increased to 4
+
+ggbiplot(drought.pca,choices = c(1,2) ,scale = 1, obs.scale = 1,var.scale = 0.5,pc.biplot = T,ellipse.prob = 0.50,groups =data$Water_Level, ellipse = T, circle = F, varname.abbrev = F,varname.size =3.7,var.axes=T,labels.size =20)+
+  geom_point(size=3, aes(color = factor(data$Water_Level)))+
+  scale_colour_manual(name="Genotype", values= c("darkorchid1","dimgrey","darkgoldenrod4"))+
+  theme(aspect.ratio = 1.5)+
+theme(legend.title = element_text(color = "black", size =12, face= "bold")) +
+  theme(axis.text.x = element_text(face = "bold", size = 14), axis.text.y = element_text(face = "bold", size = 14))+
+theme(legend.text = element_text(color = "black", size =10, face= "bold"))+
+  
+   guides(color = guide_legend(override.aes = list(size=2.5)))
+
+# extract correlation coefficients and importance of components
+drought.pca$rotation
+summary(drought.pca)
+
+#######################################################################################################
+
 ```
 
 *TRANSCRIPTOME ANALYSIS, adapted from Law et al., 2016*
@@ -30,6 +157,7 @@ features_count= featureCounts(files = bam.files,
 write.csv(features_count, file = "features_count.csv")
 
 ```
+
 
 ```{r Differential Expression analyis}
 library(edgeR)
