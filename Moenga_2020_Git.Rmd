@@ -158,7 +158,7 @@ library(edgeR)
 library(limma)
 
 counts = read.csv("/Counts/features_count.csv", sep = ",", header=T,  row.names = 1)
-str(counts_2016)
+str(counts)
 
 metadata = read.table("/Counts/metadata.csv", sep = ",", header = T)
 
@@ -176,14 +176,15 @@ y$samples$group <- metadata$group
 table(rowSums(y$counts==0)==42)
 
 keep <- rowSums(cpm(y)>1) >= 3
-#recalculate lib size after the filtering though the difference is usually negligible.
+
 y <- y[keep, , keep.lib.sizes=FALSE] #left with 20035 genes 
 
-#calculate normalization factors
+#calculate normalization factors, using Trimmed Means of M values (TMM), that will be later incorporated in DGE analysis
 y <- calcNormFactors(y, method = "TMM")
 
+## Global expression vizualization:
 
-# Generating MDS plot
+# Generating MDS plot with log CPM values
 col.treat  = c("darkorchid1","yellowgreen","tomato4")
 col.treat <- col.treat[match(y$samples$Treatment,
                                   levels(y$samples$Treatment))]
@@ -198,7 +199,8 @@ legend("top", pch = pch1,cex=1,
        legend = levels(y$samples$Genotype))
 
 
-#Fit a linear model to the data with tassuming normal distribution
+## DGE Analysis
+#Fit a linear model to the data with, assuming normal distribution
 
 design1 <- model.matrix(~0+y$samples$group)
   colnames(design1) <- levels(group)
@@ -240,7 +242,7 @@ vfit1 <- contrasts.fit(vfit, contrasts=my.contrasts_2016)
 efit <- eBayes(vfit1)
 
 
-#extract Differentially expressed genes
+#extract Differentially expressed genes, by using the relevant coeficient (as in the contrast matrix)
 topTable(efit, coef=2,resort.by="logFC", adjust.method = "BH", p.value=0.05, number =Inf)
 
 ```
@@ -249,6 +251,7 @@ topTable(efit, coef=2,resort.by="logFC", adjust.method = "BH", p.value=0.05, num
 ```{r Clustering}
 library(ComplexHeatmap) #(Gu et al., 2016)
 library(dendextend)
+
 #convert file with gene tags and LFC into matrix
 drought_exp_all= as.matrix(drought_exp_all)
     
@@ -287,17 +290,17 @@ design <- make.design.matrix(edesign_abiotic, degree = 2, time.col = 1,
 ##calculate theta
     estimateDisp(tmm(y$counts), design1)
 
-#compute a regression fit for each gene
+#compute a regression fit for each gene, with significant co-expression called at adjusted p.value 0f 0.05 (see q value)
 fit_all <- p.vector(tmm_normalized_y, design = design, MT.adjust = "BH", Q = 0.05, counts = T, min.obs = 20, theta = 11.084)
 
 #find significant variables for each gene
 tstep_all = T.fit(fit_all)
 
-#Extract list of significant genes 
+#Extract list of significant genes , using an R2 threshold of 70% 
 sigs_all = get.siggenes(tstep=tstep_all,
         rsq=0.70, vars="all")
 
-#generate plots of clusters patterned expression
+#generate plots of clusters patterned expressio
 see.genes(sigs_all$sig.genes,sigs_all$sig.genes$edesign,distance = "cor", min.obs =20, step.method = "two.ways.backward", cluster.method = "hclust",show.fit=F, k=15, alfa=0.05, color.mode= "rainbow", cexlab = 14, legend = T,summary.mode = "median", newX11 = F)
 
 
