@@ -82,7 +82,7 @@ LABELS <- generate_label_df(TUKEY , "data$Group")
 my_colors = rep(c("darkorchid1","dimgrey","darkgoldenrod4"), 4)  ##colorblind friendly colors
  
 # Draw the basic boxplot
-a <- boxplot(data$Seed_Count  ~ data$Group , ylim=c(min(data$WUE , na.rm = T) , 1.1*max(data$Seed_Count, na.rm = T)) , outline = T, col=my_colors,width = rep(c(8,8,8),4),  ylab="Seed Count" , main=" Seed Count")
+a <- boxplot(data$Seed_Count  ~ data$Group , ylim=c(min(data$Seed_Count , na.rm = T) , 1.1*max(data$Seed_Count, na.rm = T)) , outline = T, col=my_colors,width = rep(c(8,8,8),4),  ylab="Seed Count" , main=" Seed Count")
  
 # add the letter over each box at a defined position
 over <- 0.03*max( a$stats[nrow(a$stats),] )
